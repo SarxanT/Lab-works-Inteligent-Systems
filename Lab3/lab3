@@ -1,0 +1,103 @@
+clc; clear; close all;
+
+%% Training data (20 samples)
+x = 0.1:1/22:1;
+d = (1 + 0.6*sin(2*pi*x/0.7) + 0.3*sin(2*pi*x))/2;
+
+%% Initialize centers/radii (good start: peak + valley)
+[~, idxPeak]  = max(d);
+[~, idxVal]   = min(d);
+
+c1 = x(idxPeak);
+c2 = x(idxVal);
+
+% initial radii based on spacing
+distC = abs(c2 - c1);
+if distC < 1e-12, distC = (max(x)-min(x))/2; end
+r1 = distC/2;
+r2 = distC/2;
+
+% keep ordered (optional)
+if c1 > c2
+    tmp=c1; c1=c2; c2=tmp;
+    tmp=r1; r1=r2; r2=tmp;
+end
+
+%% Initialize output weights
+w0 = randn(1)*0.1;
+w1 = randn(1)*0.1;
+w2 = randn(1)*0.1;
+
+%% Learning rates (separate rates = more stable)
+eta_w = 0.10;    % weights
+eta_c = 0.01;    % centers (smaller!)
+eta_r = 0.001;   % radii  (even smaller)
+
+epochs = 20000;
+
+% radius safety
+rMin = 0.03;
+rMax = 0.50;
+
+%% Training loop (online gradient descent)
+for ep = 1:epochs
+    for i = 1:length(x)
+
+        xi = x(i);
+
+        % RBF activations
+        phi1 = exp(-((xi-c1)^2)/(2*r1^2));
+        phi2 = exp(-((xi-c2)^2)/(2*r2^2));
+
+        % Output
+        y_hat = w0 + w1*phi1 + w2*phi2;
+
+        % Error
+        e = d(i) - y_hat;
+
+        %% Update output weights (delta rule) 
+        w0 = w0 + eta_w * e;
+        w1 = w1 + eta_w * e * phi1;
+        w2 = w2 + eta_w * e * phi2;
+
+        %% Update centers (gradient descent) 
+        % c_j <- c_j + eta_c * e * w_j * dphi/dc
+        c1 = c1 + eta_c * e * w1 * phi1 * ( (xi - c1) / (r1^2) );
+        c2 = c2 + eta_c * e * w2 * phi2 * ( (xi - c2) / (r2^2) );
+
+        %% Update radii (gradient descent) 
+        %  % r_j <- r_j + eta_r * e * w_j * dphi/dr
+        r1 = r1 + eta_r * e * w1 * phi1 * ( ((xi - c1)^2) / (r1^3) );
+        r2 = r2 + eta_r * e * w2 * phi2 * ( ((xi - c2)^2) / (r2^3) );
+
+        % keep radii valid
+        r1 = min(max(r1, rMin), rMax);
+        r2 = min(max(r2, rMin), rMax);
+    end
+end
+
+%% Test on dense grid
+x_test = 0.1:1/220:1;
+y_test = (1 + 0.6*sin(2*pi*x_test/0.7) + 0.3*sin(2*pi*x_test))/2;
+
+Y_pred = zeros(size(x_test));
+for i = 1:length(x_test)
+    phi1 = exp(-((x_test(i)-c1)^2)/(2*r1^2));
+    phi2 = exp(-((x_test(i)-c2)^2)/(2*r2^2));
+    Y_pred(i) = w0 + w1*phi1 + w2*phi2;
+end
+
+%% Plot
+figure;
+plot(x,d,'bo','LineWidth',1.5); hold on;
+plot(x_test,y_test,'b--','LineWidth',2);
+plot(x_test,Y_pred,'r','LineWidth',2);
+grid on; xlabel('x'); ylabel('y');
+legend('Training data','Target function','RBF output','Location','best');
+title(sprintf('RBF w/ trained c,r | c1=%.3f r1=%.3f | c2=%.3f r2=%.3f', c1,r1,c2,r2));
+
+%% Print final parameters (for report)
+fprintf('Final parameters:\n');
+fprintf('c1=%.6f, r1=%.6f\n', c1, r1);
+fprintf('c2=%.6f, r2=%.6f\n', c2, r2);
+fprintf('w0=%.6f, w1=%.6f, w2=%.6f\n', w0, w1, w2);
