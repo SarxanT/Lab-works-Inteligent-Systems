@@ -1,0 +1,174 @@
+function pozymiai = pozymiai_raidems_atpazinti(pavadinimas, pvz_eiluciu_sk)
+%%  pozymiai = pozymiai_raidems_atpazinti(pavadinimas, pvz_eiluciu_sk)
+% Features = pozymiai_raidems_atpazinti(image_file_name, Number_of_rows)
+%
+% Example:
+% pozymiai = pozymiai_raidems_atpazinti('train_data.png', 11); 
+
+%% SAFETY CHECK: Did the user run this file directly?
+if nargin < 2
+    error('Error: Do not run this file directly. Please run "vaizdo_atpazinimas.m" instead.');
+end
+
+%% Vaizdo su pavyzdziais nuskaitymas | Read image with written symbols
+V = imread(pavadinimas);
+figure(12), imshow(V)
+
+%% Simboliu iskirpimas ir sudeliojimas i kintamojo 'objektai' celes
+%% Perform segmentation of the symbols and write into cell variable 
+
+% RGB image is converted to grayscale
+% Check if image is already grayscale
+if size(V,3) == 3
+    V_pustonis = rgb2gray(V);
+else
+    V_pustonis = V;
+end
+
+% a threshold value is calculated for binary image conversion
+slenkstis = graythresh(V_pustonis);
+
+% a grayscale image is converted to binary image
+V_dvejetainis = im2bw(V_pustonis, slenkstis);
+
+% rezultato atvaizdavimas | show the resulting image
+figure(1), imshow(V_dvejetainis)
+
+% vaizde esanciu objektu konturu paieska | search for the contour of each object
+V_konturais = edge(uint8(V_dvejetainis));
+
+% rezultato atvaizdavimas | show the resulting image
+figure(2),imshow(V_konturais)
+
+% objektu konturu uzpildymas | fill the contours
+se = strel('square',7); % strukturinis elementas uzpildymui
+V_uzpildyti = imdilate(V_konturais, se); 
+
+% rezultato atvaizdavimas | show the result
+figure(3),imshow(V_uzpildyti)
+
+% tustumu objetu viduje uzpildymas | fill the holes
+V_vientisi= imfill(V_uzpildyti,'holes');
+
+% rezultato atvaizdavimas | show the result
+figure(4),imshow(V_vientisi)
+
+% vientisu objektu dvejetainiame vaizde numeravimas
+% set labels to binary image objects
+[O_suzymeti, Skaicius] = bwlabel(V_vientisi);
+
+% apskaiciuojami objektu dvejetainiame vaizde pozymiai
+% calculate features for each symbol
+O_pozymiai = regionprops(O_suzymeti);
+
+% nuskaitomos pozymiu - objektu ribu koordinaciu - reiksmes
+% find/read the bounding box of the symbol
+O_ribos = [O_pozymiai.BoundingBox];
+
+% kadangi riba nusako 4 koordinates, pergrupuojame reiksmes
+% change the sequence of values, describing the bounding box
+O_ribos = reshape(O_ribos,[4 Skaicius]); 
+
+% nuskaitomos pozymiu - objektu mases centro koordinaciu - reiksmes
+% read the mass center coordinate
+O_centras = [O_pozymiai.Centroid];
+
+% kadangi centra nusako 2 koordinates, pergrupuojame reiksmes
+% group center coordinate values
+O_centras = reshape(O_centras,[2 Skaicius]);
+O_centras = O_centras';
+
+% pridedamas kiekvienam objektui vaize numeris (trecias stulpelis salia koordinaciu)
+% set the label/number for each object in the image
+O_centras(:,3) = 1:Skaicius;
+
+% surusiuojami objektai pagal x koordinate - stulpeli
+% arrange objects according to the column number
+O_centras = sortrows(O_centras,2);
+
+% rusiuojama atsizvelgiant i pavyzdziu eiluciu ir raidziu skaiciu
+% sort according to the number of rows and number of symbols in the row
+raidziu_sk = floor(Skaicius/pvz_eiluciu_sk);
+
+for k = 1:pvz_eiluciu_sk
+    start_idx = (k-1)*raidziu_sk+1;
+    end_idx = k*raidziu_sk;
+    % Ensure we don't exceed bounds if counting is slightly off
+    if end_idx <= Skaicius
+        O_centras(start_idx:end_idx,:) = ...
+            sortrows(O_centras(start_idx:end_idx,:),3);
+    end
+end
+
+% is dvejetainio vaizdo pagal objektu ribas iskerpami vaizdo fragmentai
+% cut the symbol from initial image according to the bounding box estimated in binary image
+objektai = cell(1, Skaicius);
+for k = 1:Skaicius
+    objektai{k} = imcrop(V_dvejetainis,O_ribos(:,O_centras(k,3)));
+end
+
+% vieno is vaizdo fragmentu atvaizdavimas
+% show symbols
+figure(5),
+for k = 1:min(Skaicius, raidziu_sk*pvz_eiluciu_sk)
+   subplot(pvz_eiluciu_sk,raidziu_sk,k), imshow(objektai{k})
+end
+
+% vaizdo fragmentai apkerpami, panaikinant fona is krastu (pagal staciakampi)
+% image segments are cut off
+for k = 1:Skaicius 
+    V_fragmentas = objektai{k};
+    [aukstis, plotis] = size(V_fragmentas);
+    
+    % 1. Baltu stulpeliu naikinimas | eliminate white spaces
+    stulpeliu_sumos = sum(V_fragmentas,1);
+    V_fragmentas(:,stulpeliu_sumos == aukstis) = [];
+    [aukstis, plotis] = size(V_fragmentas);
+    
+    % 2. Baltu eiluciu naikinimas | eliminate white rows
+    eiluciu_sumos = sum(V_fragmentas,2);
+    V_fragmentas(eiluciu_sumos == plotis,:) = [];
+    
+    objektai{k}=V_fragmentas;
+end
+
+% vieno is vaizdo fragmentu atvaizdavimas
+figure(6),
+for k = 1:min(Skaicius, raidziu_sk*pvz_eiluciu_sk)
+   subplot(pvz_eiluciu_sk,raidziu_sk,k), imshow(objektai{k})
+end
+
+%% Suvienodiname vaizdo fragmentu dydzius iki 70x50
+%% Make all segments of the same size 70x50
+pozymiai = cell(1, Skaicius);
+for k=1:Skaicius
+    V_fragmentas=objektai{k};
+    if ~isempty(V_fragmentas)
+        V_fragmentas_7050=imresize(V_fragmentas,[70,50]);
+        
+        % padalinkime vaizdo fragmenta i 10x10 dydzio dalis
+        % divide each image into 10x10 size segments
+        Vid_sviesumas = zeros(1, 35);
+        for m=1:7
+            for n=1:5
+                % apskaiciuokime kiekvienos dalies vidutini sviesuma 
+                % calculate an average intensity for each 10x10 segment
+                Vid_sviesumas_eilutese=sum(V_fragmentas_7050((m*10-9:m*10),(n*10-9:n*10)));
+                Vid_sviesumas((m-1)*5+n)=sum(Vid_sviesumas_eilutese);
+            end
+        end
+        
+        % 10x10 dydzio dalyje maksimali sviesumo galima reiksme yra 100
+        % normuokime sviesumo reiksmes intervale [0, 1]
+        % perform normalization
+        Vid_sviesumas = ((100-Vid_sviesumas)/100);
+        
+        % rezultata (pozymius) neuronu tinklui patogiau pateikti stulpeliu
+        % transform features into column-vector
+        Vid_sviesumas = Vid_sviesumas(:);
+        
+        % issaugome apskaiciuotus pozymius i bendra kintamaji
+        pozymiai{k} = Vid_sviesumas;
+    end
+end
+end
