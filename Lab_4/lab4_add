@@ -1,0 +1,125 @@
+    close all;
+    clear all;
+    clc;
+    
+    %% Skaitmenu pavyzdziu nuskaitymas ir pozymiu skaiciavimas
+    %% Read the image with hand-written digits
+    pavadinimas = 'numbers.jpg'; % Ensure this file exists with 11 rows of digits 1-9,0
+    numer_of_rows = 11; 
+    pozymiai_tinklo_mokymui = pozymiai_raidems_atpazinti(pavadinimas, numer_of_rows);
+    
+    %% Atpazintuvo kurimas
+    %% Development of digit recognizer
+    
+    % pozymiai is celiu masyvo perkeliami i matrica
+    % take the features from cell-type variable and save into a matrix-type variable
+    P = cell2mat(pozymiai_tinklo_mokymui);
+    
+    % sukuriama teisingu atsakymu matrica:
+    % We have 10 classes (digits 1, 2, 3, 4, 5, 6, 7, 8, 9, 0).
+    % We have 11 rows of training data.
+    % eye(10) creates a diagonal matrix for the 10 classes.
+    % repmat repeats this matrix 11 times to match the 11 rows of data.
+    T = repmat(eye(10), 1, numer_of_rows);
+    
+    % sukuriamas SBF tinklas duotiems P ir T sarysiams
+    % create an RBF network for classification
+    % Using 13 neurons is a starting point, may need adjustment based on accuracy
+    tinklas = newrb(P, T, 0, 1, 10);
+    
+    %% Tinklo patikra | Test of the network (recognizer)
+    % skaiciuojamas tinklo isejimas nezinomiems pozymiams
+    % Let's test on the second row of data (indices 11 to 20)
+    P2 = P(:, 11:20);
+    Y2 = sim(tinklas, P2);
+    
+    % ieskoma, kuriame isejime gauta didziausia reiksme
+    % find which neural network output gives maximum value
+    [a2, b2] = max(Y2);
+    
+    %% Rezultato atvaizdavimas
+    %% Visualize result
+    raidziu_sk = size(P2,2);
+    atsakymas = [];
+    
+    for k = 1:raidziu_sk
+        switch b2(k)
+            case 1
+                atsakymas = [atsakymas, '1'];
+            case 2
+                atsakymas = [atsakymas, '2'];
+            case 3
+                atsakymas = [atsakymas, '3'];
+            case 4
+                atsakymas = [atsakymas, '4'];
+            case 5
+                atsakymas = [atsakymas, '5'];
+            case 6
+                atsakymas = [atsakymas, '6'];
+            case 7
+                atsakymas = [atsakymas, '7'];
+            case 8
+                atsakymas = [atsakymas, '8'];
+            case 9
+                atsakymas = [atsakymas, '9'];
+            case 10
+                atsakymas = [atsakymas, '0'];
+        end
+    end
+    
+    % pateikime rezultata komandiniame lange
+    disp('Test Results (Verification on training data subset):');
+    disp(atsakymas);
+    
+    
+    %% NAUJO vaizdo atpazinimas (pvz. test_skaiciai.png)
+    %% Recognize digits from a new file
+    % Assume the test file has 1 row of digits
+    pavadinimas_test = 'test1.jpg'; 
+    
+    if exist(pavadinimas_test, 'file')
+        pozymiai_patikrai = pozymiai_raidems_atpazinti(pavadinimas_test, 1);
+        
+        % pozymiai is celiu masyvo perkeliami i matrica
+        P2 = cell2mat(pozymiai_patikrai);
+        
+        % skaiciuojamas tinklo isejimas
+        Y2 = sim(tinklas, P2);
+        
+        % ieskoma didziausios reiksmes
+        [a2, b2] = max(Y2);
+        
+        % Rezultato formavimas
+        raidziu_sk = size(P2,2);
+        atsakymas = [];
+        for k = 1:raidziu_sk
+            switch b2(k)
+                case 1
+                    atsakymas = [atsakymas, '1'];
+                case 2
+                    atsakymas = [atsakymas, '2'];
+                case 3
+                    atsakymas = [atsakymas, '3'];
+                case 4
+                    atsakymas = [atsakymas, '4'];
+                case 5
+                    atsakymas = [atsakymas, '5'];
+                case 6
+                    atsakymas = [atsakymas, '6'];
+                case 7
+                    atsakymas = [atsakymas, '7'];
+                case 8
+                    atsakymas = [atsakymas, '8'];
+                case 9
+                    atsakymas = [atsakymas, '9'];
+                case 10
+                    atsakymas = [atsakymas, '0'];
+            end
+        end
+        
+        disp('Recognition Result:');
+        disp(atsakymas);
+        figure(8), text(0.1, 0.5, atsakymas, 'FontSize', 38), axis off
+    else
+        disp(['File ', pavadinimas_test, ' not found. Skipping test section.']);
+    end
